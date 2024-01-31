@@ -7,8 +7,8 @@ from datasets import load_dataset
 from peft import LoraConfig
 from tqdm import tqdm
 from transformers import AutoTokenizer, pipeline
-import sys
-sys.path.append("/home/phuc/Documents/RLHF")
+# import sys
+# sys.path.append("/home/phuc/Documents/RLHF")
 from src.alignment import H4ArgumentParser
 from trl import AutoModelForCausalLMWithValueHead, AutoModelForSeq2SeqLMWithValueHead, PPOConfig, PPOTrainer, set_seed
 from trl.core import LengthSampler

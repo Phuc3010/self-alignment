@@ -5,8 +5,8 @@ from trl import create_reference_model
 import wandb 
 import warnings
 from collections import defaultdict
-import sys
-sys.path.append("/home/phuc/Documents/RLHF")
+# import sys
+# sys.path.append("/home/phuc/Documents/RLHF")
 import numpy as np
 import torch.nn.functional as F
 from typing import Literal, Union, Any 

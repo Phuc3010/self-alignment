@@ -25,8 +25,8 @@ import datasets
 import torch
 import transformers
 from transformers import set_seed, AutoModelForCausalLM
-import sys
-sys.path.append("/home/phuc/Documents/RLHF")
+# import sys
+# sys.path.append("/home/phuc/Documents/RLHF")
 
 from src.alignment import (
     DataArguments,

@@ -2,8 +2,8 @@ import torch
 from datasets import load_dataset
 from tqdm import tqdm
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
-import sys
-sys.path.append("/home/phuc/Documents/RLHF")
+# import sys
+# sys.path.append("/home/phuc/Documents/RLHF")
 from src.alignment import ModelArguments, DataArguments, H4ArgumentParser, get_kbit_device_map, get_peft_config, get_quantization_config, get_tokenizer
 from trl import RewardConfig, RewardTrainer
 

@@ -20,8 +20,8 @@ import sys
 import torch
 import transformers
 from transformers import AutoModelForCausalLM, set_seed
-import sys
-sys.path.append("/home/phuc/Documents/RLHF")
+# import sys
+# sys.path.append("/home/phuc/Documents/RLHF")
 from src.alignment.trainer import WeightedDPOTrainer
 from src.alignment import (
     DataArguments,
