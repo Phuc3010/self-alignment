@@ -206,6 +206,9 @@ def main():
         sampled_chosen = [chosen[idx] for idx in idxs]
         sampled_query_tensor = [query_tensor[idx] for idx in idxs]
         generated_response = trainer.generate(sampled_query_tensor, **generation_kwargs, batch_size=16)
+        for index in random.sample(range(len(sampled_prompt)), 3):
+            logger.info(f"Prompt sample {index} of the raw training set: {sampled_prompt[index]}\n")
+            logger.info(f"Generated sample {index} of the raw training set: {generated_response[index]}\n")
         trainer.step(sampled_prompt, sampled_chosen, generated_response)
         logger.info("*** Save model ***")
         trainer.save_model(training_args.output_dir+f"/iter{iter+1}")
