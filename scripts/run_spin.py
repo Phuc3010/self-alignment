@@ -196,7 +196,7 @@ def main():
 
     prompt = [ele for ele in raw_datasets['train']['prompt']]
     chosen = [ele for ele in raw_datasets['train']['chosen']]
-    query_tensor = [tokenizer(ele, return_tensors="pt").input_ids.squeeze() for ele in prompt]
+    query_tensor = [tokenizer(ele, return_tensors="pt").inpcut_ids.squeeze() for ele in prompt]
     num_synthetic = training_args.num_synthetic
     num_generated = min(len(prompt), num_synthetic)
     print(f"Number of generated samples per iteration {num_generated}")
