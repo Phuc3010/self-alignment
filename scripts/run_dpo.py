@@ -21,7 +21,7 @@ import torch
 import transformers
 from transformers import AutoModelForCausalLM, set_seed
 import sys
-sys.path.append("/home/phuc/Documents/RLHF")
+sys.path.append("/alignment-handbook")
 from src.alignment import (
     DataArguments,
     DPOConfig,
