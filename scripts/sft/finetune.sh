@@ -10,4 +10,4 @@ ACCELERATE_LOG_LEVEL=info
 # --warmup_ratio=0.1: Defines the warmup ratio for learning rate scheduling.
 # --output_dir="${path_to_save_checkpoint}": Directory where training checkpoints will be saved.
 # Execution command: Runs 'spin/run_spin.py' with 'configs/config.yaml' as its configuration.
-accelerate launch --config_file recipes/accelerate_configs/multi_gpu.yaml --num_processes=1 scripts/run_dpo.py recipes/pythia/pythia-1b/sft/config_full.yaml
+accelerate launch --config_file recipes/accelerate_configs/multi_gpu.yaml --num_processes=1 scripts/run_sft.py recipes/pythia/pythia-1b/sft/config_full.yaml
