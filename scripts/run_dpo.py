@@ -117,6 +117,13 @@ def main():
     )
     quantization_config = get_quantization_config(model_args)
 
+    if training_args.bf16:
+        torch_dtype = torch.bfloat16
+        training_args.bf16 = False
+    elif training_args.fp16:
+        torch_dtype = torch.float16
+        training_args.fp16 = False
+
     model_kwargs = dict(
         revision=model_args.model_revision,
         trust_remote_code=model_args.trust_remote_code,
