@@ -29,7 +29,10 @@ def apply_chat_template(
     task: Literal["sft", "generation", "rm", "dpo"],
 ):
     if task in ["sft", "generation"]:
-        messages = example["messages"]
+        try:
+            messages = example["messages"]   
+        except:
+            messages = example['real']
         # We add an empty system message if there is none
         if messages[0]["role"] != "system":
             messages.insert(0, {"role": "system", "content": ""})

@@ -17,24 +17,41 @@
 Supervised fine-tuning script for decoder language models.
 """
 
-from typing import Literal
+#!/usr/bin/env python
+# coding=utf-8
+# Copyright 2023 The HuggingFace Inc. team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+Supervised fine-tuning script for decoder language models.
+"""
+
 import logging
 import random
 import sys
+sys.path.append("/alignment-handbook")
 
 import datasets
 import torch
 import transformers
-from transformers import set_seed, AutoModelForCausalLM
-import sys
-sys.path.append("/alignment-handbook")
+from transformers import set_seed
 
 from src.alignment import (
     DataArguments,
     H4ArgumentParser,
     ModelArguments,
     SFTConfig,
-    # apply_chat_template,
+    apply_chat_template,
     get_checkpoint,
     get_datasets,
     get_kbit_device_map,
@@ -46,61 +63,6 @@ from trl import SFTTrainer
 
 
 logger = logging.getLogger(__name__)
-
-def apply_chat_template(
-    example,
-    tokenizer,
-    task: Literal["sft", "generation", "rm", "dpo"],
-):
-    if task in ["sft", "generation"]:
-        try:
-            messages = example["messages"]
-        except:
-            messages = example['real']
-        # We add an empty system message if there is none
-        if messages[0]["role"] != "system":
-            messages.insert(0, {"role": "system", "content": ""})
-        example["text"] = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True if task == "generation" else False
-        )
-    elif task == "rm":
-        if all(k in example.keys() for k in ("chosen", "rejected")):
-            chosen_messages = example["chosen"]
-            rejected_messages = example["rejected"]
-            # We add an empty system message if there is none
-            if chosen_messages[0]["role"] != "system":
-                chosen_messages.insert(0, {"role": "system", "content": ""})
-            if rejected_messages[0]["role"] != "system":
-                rejected_messages.insert(0, {"role": "system", "content": ""})
-            example["text_chosen"] = tokenizer.apply_chat_template(chosen_messages, tokenize=False)
-            example["text_rejected"] = tokenizer.apply_chat_template(rejected_messages, tokenize=False)
-        else:
-            raise ValueError(
-                f"Could not format example as dialogue for `rm` task! Require `[chosen, rejected]` keys but found {list(example.keys())}"
-            )
-    elif task == "dpo":
-        if all(k in example.keys() for k in ("chosen", "rejected")):
-            # For DPO, the inputs are triples of (prompt, chosen, rejected), where `chosen` and `rejected` are the final turn of a dialogue
-            # We therefore need to extract the N-1 turns to form the prompt
-            prompt_messages = example["chosen"][:-1]
-            # Prepend a system message if the first message is not a system message
-            if example["chosen"][0]["role"] != "system":
-                prompt_messages.insert(0, {"role": "system", "content": ""})
-            # Now we extract the final turn to define chosen/rejected responses
-            chosen_messages = example["chosen"][-1:]
-            rejected_messages = example["rejected"][-1:]
-            example["text_chosen"] = tokenizer.apply_chat_template(chosen_messages, tokenize=False)
-            example["text_rejected"] = tokenizer.apply_chat_template(rejected_messages, tokenize=False)
-            example["text_prompt"] = tokenizer.apply_chat_template(prompt_messages, tokenize=False)
-        else:
-            raise ValueError(
-                f"Could not format example as dialogue for `dpo` task! Require `[chosen, rejected]` keys but found {list(example.keys())}"
-            )
-    else:
-        raise ValueError(
-            f"Task {task} not supported, please ensure that the provided task is one of {['sft', 'generation', 'rm', 'dpo']}"
-        )
-    return example
 
 
 def main():
@@ -142,12 +104,7 @@ def main():
     ###############
     # Load datasets
     ###############
-    try:
-        raw_datasets = get_datasets(data_args, splits=data_args.dataset_splits)
-    except:
-        from datasets import load_dataset
-        print(data_args.dataset_mixer.keys())
-        raw_datasets = load_dataset(list(data_args.dataset_mixer.keys())[0])
+    raw_datasets = get_datasets(data_args, splits=data_args.dataset_splits)
     logger.info(
         f"Training on the following datasets and their proportions: {[split + ' : ' + str(dset.num_rows) for split, dset in raw_datasets.items()]}"
     )
@@ -161,17 +118,15 @@ def main():
     #####################
     # Apply chat template
     #####################
-    if data_args.turn_type is not None:
-        raw_datasets = raw_datasets.map(
-            apply_chat_template,
-            fn_kwargs={"tokenizer": tokenizer, "task": "sft"},
-            num_proc=data_args.preprocessing_num_workers,
-            remove_columns=column_names,
-            desc="Applying chat template",
-        )
+    raw_datasets = raw_datasets.map(
+        apply_chat_template,
+        fn_kwargs={"tokenizer": tokenizer, "task": "sft"},
+        num_proc=data_args.preprocessing_num_workers,
+        remove_columns=column_names,
+        desc="Applying chat template",
+    )
     train_dataset = raw_datasets["train"]
     eval_dataset = raw_datasets["test"]
-    print(train_dataset[0])
 
     with training_args.main_process_first(desc="Log a few random samples from the processed training set"):
         for index in random.sample(range(len(raw_datasets["train"])), 3):
@@ -185,12 +140,6 @@ def main():
         model_args.torch_dtype if model_args.torch_dtype in ["auto", None] else getattr(torch, model_args.torch_dtype)
     )
     quantization_config = get_quantization_config(model_args)
-    if training_args.bf16:
-        torch_dtype = torch.bfloat16
-        training_args.bf16 = False
-    elif training_args.fp16:
-        torch_dtype = torch.float16
-        training_args.fp16 = False
 
     model_kwargs = dict(
         revision=model_args.model_revision,
@@ -206,7 +155,6 @@ def main():
     ########################
     # Initialize the Trainer
     ########################
-    # model = AutoModelForCausalLM.from_pretrained(model_args.model_name_or_path, **model_kwargs)
     trainer = SFTTrainer(
         model=model_args.model_name_or_path,
         model_init_kwargs=model_kwargs,
@@ -216,8 +164,8 @@ def main():
         dataset_text_field="text",
         max_seq_length=training_args.max_seq_length,
         tokenizer=tokenizer,
-        # packing=True,
-        # peft_config=get_peft_config(model_args),
+        packing=True,
+        peft_config=get_peft_config(model_args),
     )
 
     ###############
@@ -229,8 +177,7 @@ def main():
         checkpoint = training_args.resume_from_checkpoint
     elif last_checkpoint is not None:
         checkpoint = last_checkpoint
-    with torch.backends.cuda.sdp_kernel(enable_flash=True, enable_math=False, enable_mem_efficient=False):
-        train_result = trainer.train(resume_from_checkpoint=checkpoint)
+    train_result = trainer.train(resume_from_checkpoint=checkpoint)
     metrics = train_result.metrics
     metrics["train_samples"] = len(train_dataset)
     trainer.log_metrics("train", metrics)
