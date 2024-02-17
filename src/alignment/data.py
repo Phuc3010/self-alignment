@@ -22,41 +22,6 @@ from .configs import DataArguments
 
 
 DEFAULT_CHAT_TEMPLATE = "{% for message in messages %}\n{% if message['role'] == 'user' %}\n{{ '<|user|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'system' %}\n{{ '<|system|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'assistant' %}\n{{ '<|assistant|>\n'  + message['content'] + eos_token }}\n{% endif %}\n{% if loop.last and add_generation_prompt %}\n{{ '<|assistant|>' }}\n{% endif %}\n{% endfor %}"
-INSTRUCTION_TEMPLATE = "### Instruction: {prompt}\n\n### Response: "
-
-def apply_single_turn_template(
-    example,
-    tokenizer,
-    task: Literal["sft", "generation", "rm", "dpo"]
-):
-    if task in ["sft", "generation"]:
-        messages = example['messages']
-        for msg in messages: 
-            if msg['role'] == "assistant":
-                response = msg['content']
-                break
-        example['text'] = INSTRUCTION_TEMPLATE.format_map({"prompt": example['prompt']}) + response
-    elif task in ["dpo", "rm"]:
-        try:
-            chosen_messages = example['chosen']
-            rejected_messages = example['rejected']
-        except:
-            raise ValueError(
-                f"Could not format example as dialogue for `rm` task! Require `[chosen, rejected]` keys but found {list(example.keys())}"
-            )
-        for msg in chosen_messages:
-            if msg['role'] == "assistant":
-                chosen_response = msg['content']
-                break
-        for msg in rejected_messages:
-            if msg['role'] == "assistant":
-                rejected_response = msg['content']
-                break
-        prompt = example['prompt']
-        example["text_prompt"] = INSTRUCTION_TEMPLATE.format_map({"prompt": prompt})
-        example['text_chosen'] = chosen_response
-        example['text_rejected'] = rejected_response
-    return example
 
 def apply_chat_template(
     example,

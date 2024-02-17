@@ -25,8 +25,8 @@ import datasets
 import torch
 import transformers
 from transformers import set_seed, AutoModelForCausalLM
-# import sys
-# sys.path.append("/home/phuc/Documents/RLHF")
+import sys
+sys.path.append("alignment-handbook")
 
 from src.alignment import (
     DataArguments,
@@ -108,7 +108,7 @@ def main():
     #####################
     if data_args.turn_type is not None:
         raw_datasets = raw_datasets.map(
-            apply_chat_template if data_args.turn_type == "multi" else apply_single_turn_template,
+            apply_chat_template,
             fn_kwargs={"tokenizer": tokenizer, "task": "sft"},
             num_proc=data_args.preprocessing_num_workers,
             remove_columns=column_names,
