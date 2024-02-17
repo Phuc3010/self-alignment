@@ -48,7 +48,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if args.data == 'HuggingFaceH4/ultrachat_200k':
-        train_data = load_and_process_data_ultrachat(args.data, 'train_sft', frac=0.25)
+        train_data = load_and_process_data_ultrachat(args.data, 'train_sft')
         test_data = load_and_process_data_ultrachat(args.data, 'test_sft')
 
     train_json_path = output_dir / 'train.json'

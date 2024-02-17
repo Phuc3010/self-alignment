@@ -1,4 +1,4 @@
-model_name_or_path: DatPySci/pythia-1b-sft-full
+model_name_or_path: DatPySci/pythia-1b-sft-50k
 torch_dtype: null
 
 # Data training arguments
@@ -17,7 +17,7 @@ beta: 0.01
 do_eval: true
 evaluation_strategy: steps
 eval_steps: 100
-gradient_accumulation_steps: 4
+gradient_accumulation_steps: 8
 gradient_checkpointing: true
 gradient_checkpointing_kwargs:
   use_reentrant: False
@@ -25,11 +25,11 @@ hub_model_id: pythia-1b-dpo-full
 learning_rate: 5.0e-7
 log_level: info
 logging_steps: 5
-lr_scheduler_type: cosine
+lr_scheduler_type: linear
 max_length: 1024
 max_prompt_length: 512
 num_train_epochs: 1
-optim: adamw_torch
+optim: rmsprop
 output_dir: data/pythia-1b-dpo-full
 per_device_train_batch_size: 4
 per_device_eval_batch_size: 8
