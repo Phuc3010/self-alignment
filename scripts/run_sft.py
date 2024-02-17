@@ -39,7 +39,7 @@ Supervised fine-tuning script for decoder language models.
 import logging
 import random
 import sys
-sys.path.append("/alignment-handbook")
+sys.path.append("/home/phuc/Documents/alignment-handbook")
 
 import datasets
 import torch
