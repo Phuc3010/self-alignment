@@ -14,6 +14,7 @@ sys.path.append("/alignment-handbook")
 from src.alignment import (
     DataArguments,
     SPINConfig,
+    get_checkpoint,
     H4ArgumentParser,
     ModelArguments,
     get_datasets,
@@ -87,6 +88,9 @@ def main():
 
     # Set seed for reproducibility
     set_seed(training_args.seed)
+    last_checkpoint = get_checkpoint(training_args)
+    if last_checkpoint is not None and training_args.resume_from_checkpoint is None:
+        logger.info(f"Checkpoint detected, resuming training at {last_checkpoint=}.")
 
     # Increase distributed timeout to 3h to enable push to Hub to complete
     accelerator = Accelerator()
@@ -175,12 +179,17 @@ def main():
     ###############
     # Training loop
     ###############
-    train_result = spin_trainer.train()
+    checkpoint = None
+    if training_args.resume_from_checkpoint is not None:
+        checkpoint = training_args.resume_from_checkpoint
+    elif last_checkpoint is not None:
+        checkpoint = last_checkpoint
+    train_result = spin_trainer.train(resume_from_checkpoint=checkpoint)
     metrics = train_result.metrics
-    max_train_samples = (
-        data_args.max_train_samples if data_args.max_train_samples is not None else len(raw_datasets["train"])
-    )
-    metrics["train_samples"] = min(max_train_samples, len(raw_datasets["train"]))
+    # max_train_samples = (
+    #     data_args.max_train_samples if data_args.max_train_samples is not None else len(raw_datasets["train"])
+    # )
+    # metrics["train_samples"] = min(max_train_samples, len(raw_datasets["train"]))
     spin_trainer.log_metrics("train", metrics)
     spin_trainer.save_metrics("train", metrics)
     spin_trainer.save_state()
@@ -192,13 +201,14 @@ def main():
     ##################################
     spin_trainer.save_model(training_args.output_dir)
     # Save everything else on main process
-    if accelerator.is_main_process:
-        kwargs = {
+    
+    kwargs = {
             "finetuned_from": model_args.model_name_or_path,
             "dataset": list(data_args.dataset_mixer.keys()),
             "dataset_tags": list(data_args.dataset_mixer.keys()),
             "tags": ["alignment-handbook"],
-        }
+    }
+    if accelerator.is_main_process:
         spin_trainer.create_model_card(**kwargs)
         # Restore k,v cache for fast inference
         spin_trainer.model.config.use_cache = True
