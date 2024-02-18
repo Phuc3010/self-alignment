@@ -27,7 +27,6 @@ from src.alignment import (
     DPOConfig,
     H4ArgumentParser,
     ModelArguments,
-    apply_single_turn_template,
     apply_chat_template,
     get_checkpoint,
     get_datasets,
@@ -93,7 +92,7 @@ def main():
     #####################
     if data_args.turn_type is not None:
         raw_datasets = raw_datasets.map(
-            apply_chat_template if data_args.turn_type == "multi" else apply_single_turn_template,
+            apply_chat_template,
             fn_kwargs={"tokenizer": tokenizer, "task": "dpo"},
             num_proc=data_args.preprocessing_num_workers,
             remove_columns=column_names,
