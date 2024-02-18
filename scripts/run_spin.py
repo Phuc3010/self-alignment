@@ -9,7 +9,9 @@ import transformers
 from transformers import AutoModelForCausalLM, set_seed
 
 from accelerate import Accelerator
-from alignment import (
+sys.path.append("/alignment-handbook")
+
+from src.alignment import (
     DataArguments,
     SPINConfig,
     H4ArgumentParser,
@@ -22,7 +24,7 @@ from alignment import (
     is_adapter_model,
 )
 from peft import PeftConfig, PeftModel
-from alignment import SPINTrainer
+from src.alignment import SPINTrainer
 from torch.utils.data import Subset
 import re
 
