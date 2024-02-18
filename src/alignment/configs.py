@@ -225,13 +225,13 @@ class SFTConfig(transformers.TrainingArguments):
     )
     optim: Optional[str] = field(default="adamw_torch")
 
+
 @dataclass
 class SPINConfig(transformers.TrainingArguments):
-    """
-    Arguments related to the SPIN training process. For information of parameters, see https://arxiv.org/abs/2401.01335
-    """
+
     beta: Optional[float] = field(
         default=0.1,
+        metadata={"help": "The beta factor in SPIN loss. Higher beta means less divergence from the initial policy."},
     )
     hub_model_revision: Optional[str] = field(
         default="main",
@@ -243,24 +243,14 @@ class SPINConfig(transformers.TrainingArguments):
     )
     max_prompt_length: Optional[int] = field(
         default=None,
-        metadata={"help": ("For SPIN, the maximum length of the prompt to use for conditioning the model.")},
-    )
-    num_iters: Optional[int] = field(
-        default=3,
-        metadata={"help": "Number of SPIN Iterations"}
+        metadata={"help": ("The maximum length of the prompt to use for conditioning the model.")},
     )
     max_length: Optional[int] = field(
         default=None,
         metadata={"help": ("Used by TRL for reward model training, which tries to read this parameter in init.")},
     )
-    num_synthetic: Optional[int] = field(
-        default=50_000,
-        metadata={"help": ("Number of synthetic generated data to for each iteration in SPIN")}
-    )
-    remove_unused_columns: bool = field(default=False)
-    loss_type: Optional[str] = field(default="sigmoid", metadata={"help": ("The loss type for SPIN.")})
     optim: Optional[str] = field(default="rmsprop")
-
+    remove_unused_columns: bool = field(default=False)
 
 @dataclass
 class DPOConfig(transformers.TrainingArguments):
