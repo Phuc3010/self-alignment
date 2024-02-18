@@ -26,7 +26,7 @@ max_length: 1024
 max_prompt_length: 512
 num_train_epochs: 2
 optim: rmsprop
-output_dir: outputs
+output_dir: data/model/pythia-1b-spin-iter1
 per_device_train_batch_size: 4
 per_device_eval_batch_size: 4
 push_to_hub: true
