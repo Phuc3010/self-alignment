@@ -55,15 +55,75 @@ from src.alignment import (
     get_checkpoint,
     get_datasets,
     get_kbit_device_map,
+    process_data_ultrachat,
     get_peft_config,
     get_quantization_config,
     get_tokenizer,
 )
+from typing import Literal
 from trl import SFTTrainer
 
 
 logger = logging.getLogger(__name__)
 
+def process_data_ultrachat(example):
+    example['messages'] = [example['messages'][0], example['messages'][1]]
+    return example
+
+def apply_chat_template(
+    example,
+    tokenizer,
+    task: Literal["sft", "generation", "rm", "dpo"],
+):
+    if task in ["sft", "generation"]:
+        try:
+            messages = example["messages"]   
+        except:
+            messages = example['real']
+        # We add an empty system message if there is none
+        if messages[0]["role"] != "system":
+            messages.insert(0, {"role": "system", "content": ""})
+        example["text"] = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True if task == "generation" else False
+        )
+    elif task == "rm":
+        if all(k in example.keys() for k in ("chosen", "rejected")):
+            chosen_messages = example["chosen"]
+            rejected_messages = example["rejected"]
+            # We add an empty system message if there is none
+            if chosen_messages[0]["role"] != "system":
+                chosen_messages.insert(0, {"role": "system", "content": ""})
+            if rejected_messages[0]["role"] != "system":
+                rejected_messages.insert(0, {"role": "system", "content": ""})
+            example["text_chosen"] = tokenizer.apply_chat_template(chosen_messages, tokenize=False)
+            example["text_rejected"] = tokenizer.apply_chat_template(rejected_messages, tokenize=False)
+        else:
+            raise ValueError(
+                f"Could not format example as dialogue for `rm` task! Require `[chosen, rejected]` keys but found {list(example.keys())}"
+            )
+    elif task == "dpo":
+        if all(k in example.keys() for k in ("chosen", "rejected")):
+            # For DPO, the inputs are triples of (prompt, chosen, rejected), where `chosen` and `rejected` are the final turn of a dialogue
+            # We therefore need to extract the N-1 turns to form the prompt
+            prompt_messages = example["chosen"][:-1]
+            # Prepend a system message if the first message is not a system message
+            if example["chosen"][0]["role"] != "system":
+                prompt_messages.insert(0, {"role": "system", "content": ""})
+            # Now we extract the final turn to define chosen/rejected responses
+            chosen_messages = example["chosen"][-1:]
+            rejected_messages = example["rejected"][-1:]
+            example["text_chosen"] = tokenizer.apply_chat_template(chosen_messages, tokenize=False)
+            example["text_rejected"] = tokenizer.apply_chat_template(rejected_messages, tokenize=False)
+            example["text_prompt"] = tokenizer.apply_chat_template(prompt_messages, tokenize=False)
+        else:
+            raise ValueError(
+                f"Could not format example as dialogue for `dpo` task! Require `[chosen, rejected]` keys but found {list(example.keys())}"
+            )
+    else:
+        raise ValueError(
+            f"Task {task} not supported, please ensure that the provided task is one of {['sft', 'generation', 'rm', 'dpo']}"
+        )
+    return example
 
 def main():
     parser = H4ArgumentParser((ModelArguments, DataArguments, SFTConfig))
@@ -118,6 +178,12 @@ def main():
     #####################
     # Apply chat template
     #####################
+    if data_args.turn_type == "single":
+        raw_datasets = raw_datasets.map(
+            process_data_ultrachat,
+            num_proc=4,
+            desc="Applying single turn type",
+        )
     raw_datasets = raw_datasets.map(
         apply_chat_template,
         fn_kwargs={"tokenizer": tokenizer, "task": "sft"},
@@ -141,6 +207,13 @@ def main():
     )
     
     quantization_config = get_quantization_config(model_args)
+
+    if training_args.bf16:
+        torch_dtype = torch.bfloat16
+        training_args.bf16 = False
+    elif training_args.fp16:
+        torch_dtype = torch.float16
+        training_args.fp16 = False
 
     model_kwargs = dict(
         revision=model_args.model_revision,

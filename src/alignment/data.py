@@ -17,11 +17,15 @@ from typing import List, Literal, Optional
 
 from datasets import DatasetDict, concatenate_datasets, load_dataset, load_from_disk
 from datasets.builder import DatasetGenerationError
-
+import logging
 from .configs import DataArguments
 
 
 DEFAULT_CHAT_TEMPLATE = "{% for message in messages %}\n{% if message['role'] == 'user' %}\n{{ '<|user|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'system' %}\n{{ '<|system|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'assistant' %}\n{{ '<|assistant|>\n'  + message['content'] + eos_token }}\n{% endif %}\n{% if loop.last and add_generation_prompt %}\n{{ '<|assistant|>' }}\n{% endif %}\n{% endfor %}"
+
+def process_data_ultrachat(example):
+    example['messages'] = [example['messages'][0], example['messages'][1]]
+    return example
 
 def apply_chat_template(
     example,
@@ -145,6 +149,7 @@ def mix_datasets(dataset_mixer: dict, splits: Optional[List[str]] = None, shuffl
                 dataset = load_dataset(ds, split=split)
             except:
                 # If not, check local dataset
+                logging.info(f"Load {ds} from disk")
                 dataset = load_from_disk(os.path.join(ds, split))
 
             if "train" in split:
