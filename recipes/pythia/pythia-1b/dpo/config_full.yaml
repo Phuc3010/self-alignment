@@ -1,4 +1,4 @@
-model_name_or_path: DatPySci/pythia-1b-sft-50k
+model_name_or_path: DatPySci/pythia-1b-sft-full
 torch_dtype: null
 
 # Data training arguments
@@ -17,7 +17,7 @@ beta: 0.01
 do_eval: true
 evaluation_strategy: steps
 eval_steps: 100
-gradient_accumulation_steps: 8
+gradient_accumulation_steps: 4
 gradient_checkpointing: true
 gradient_checkpointing_kwargs:
   use_reentrant: False
@@ -31,7 +31,7 @@ max_prompt_length: 512
 num_train_epochs: 1
 optim: rmsprop
 output_dir: data/pythia-1b-dpo-full
-per_device_train_batch_size: 4
+per_device_train_batch_size: 8
 per_device_eval_batch_size: 8
 push_to_hub: true
 save_strategy: "steps"
