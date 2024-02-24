@@ -1,0 +1,6 @@
+defaults:
+  - base_model
+
+name_or_path: EleutherAI/pythia-410m-deduped-v0
+block_name: GPTNeoXLayer
+use_flash_attention: true

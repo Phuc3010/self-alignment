@@ -1,0 +1,6 @@
+- +loss=kto
+- +model=pythia1b
+- datasets=[synthetic]
+- exp_name=kto_pythia1b
+- mode=train
+- ++cache_dir=/data/models
