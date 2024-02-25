@@ -10,7 +10,7 @@ import random
 
 def setup_arg_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output_dir', type=str, default='generated/iter0')
+    parser.add_argument('--output_dir', type=str, default='generated/synthetic')
     parser.add_argument('--data', type=str, default='HuggingFaceH4/ultrachat_200k')
     return parser.parse_args()
 

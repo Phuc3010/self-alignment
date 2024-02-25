@@ -107,7 +107,7 @@ class SPINTrainer(Trainer):
         model: Union[PreTrainedModel, nn.Module, str] = None,
         ref_model: Optional[Union[PreTrainedModel, nn.Module, str]] = None,
         beta: float = 0.1,
-        loss_type: Literal["sigmoid", "hinge", "kto_pair"] = "sigmoid",
+        loss_type: Literal["sigmoid", "hinge", "kto_pair", "nnpu"] = "sigmoid",
         args: TrainingArguments = None,
         data_collator: Optional[DataCollator] = None,
         label_pad_token_id: int = -100,
@@ -447,8 +447,18 @@ class SPINTrainer(Trainer):
                 ),
                 0,
             )
+        elif self.loss_type == "nnpu":
+            real_kl = (policy_real_logps-opponent_real_logps).mean().clamp(min=0)
+            generated_kl = (policy_generated_logps-opponent_generated_logps).mean().clamp(min=0)
+            real_logratios = policy_real_logps - opponent_real_logps
+            generated_logratios = policy_generated_logps - opponent_generated_logps
+            expert_losses = 0.5*(1 - F.sigmoid(self.beta*(real_logratios-generated_kl)))
+            expert_negative_losses = 0.5*(1-F.sigmoid(self.beta*(generated_kl-real_logratios)))
+            unlabeled_negative_losses = 1-F.sigmoid(self.beta*(real_kl-generated_logratios))
+            policy_losses = torch.clamp(expert_negative_losses-unlabeled_negative_losses, min=-0.0)
+            losses = expert_losses + policy_losses
         else:
-            raise ValueError(f"Unknown loss type: {self.loss_type}. Should be one of ['sigmoid', 'hinge', 'kto_pair']")
+            raise ValueError(f"Unknown loss type: {self.loss_type}. Should be one of ['sigmoid', 'hinge', 'kto_pair', 'nnpu']")
 
         real_rewards = self.beta * (policy_real_logps - opponent_real_logps).detach()
         generated_rewards = self.beta * (policy_generated_logps - opponent_generated_logps).detach()

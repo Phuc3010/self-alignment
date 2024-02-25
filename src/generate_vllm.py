@@ -74,14 +74,12 @@ def main():
     for idx in range(len(corrects_all)):
         d = {"real": [{"role": "user", "content": prompts_old[idx]}, {"role": "assistant", "content": corrects_all[idx]}], "generated": [{"role": "user", "content": prompts_old[idx]}, {"role": "assistant", "content": results[idx]}]}
         if args.split == 'test':
-            filename = f"{args.output_dir}/loser_{data_frac}_test.jsonl"
+            filename = f"{args.output_dir}/test.jsonl"
         else:
-            filename = f"{args.output_dir}/loser_{data_frac}.jsonl"
+            filename = f"{args.output_dir}/train.jsonl"
         with open(filename, 'a') as f:
             json.dump(d, f)
             f.write('\n')
     
-
-
 if __name__ == "__main__":
     main()

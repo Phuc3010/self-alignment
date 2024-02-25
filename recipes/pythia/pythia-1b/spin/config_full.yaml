@@ -1,9 +1,11 @@
-model_name_or_path: DatPySci/pythia-1b-sft-50k
+model_name_or_path: DatPySci/pythia-1b-sft-full
+use_flash_attention_2: true
 
 # Data training arguments
 dataset_mixer:
   #HuggingFaceH4/ultrafeedback_binarized: 1.0
-  DatPySci/SPIN_iter1: 1.0
+  generated/iter0: 1.0
+  # DatPySci/SPIN_iter1: 1.0
 dataset_splits:
 - train
 - test
@@ -14,10 +16,10 @@ bf16: true
 beta: 0.1
 do_eval: true
 evaluation_strategy: "steps"
-eval_steps: 100
-gradient_accumulation_steps: 8
+eval_steps: 300
+gradient_accumulation_steps: 16
 gradient_checkpointing: true
-hub_model_id: pythia-1b-spin-iter1
+hub_model_id: pythia-1b-kto-iter0
 learning_rate: 5.0e-7
 log_level: info
 logging_steps: 5
@@ -26,10 +28,11 @@ max_length: 1024
 max_prompt_length: 512
 num_train_epochs: 2
 optim: rmsprop
-output_dir: data/model/pythia-1b-spin-iter1
+output_dir: data/model/pythia-1b-kto-iter0
 per_device_train_batch_size: 4
 per_device_eval_batch_size: 4
 push_to_hub: true
+loss_type: "nnpu"
 save_strategy: "epoch"
 save_total_limit: 1
 seed: 42
