@@ -456,7 +456,7 @@ class SPINTrainer(Trainer):
             expert_losses = prior*(1 - F.sigmoid(self.beta*(real_logratios-generated_kl)))
             expert_negative_losses = prior*(1-F.sigmoid(self.beta*(generated_kl-real_logratios)))
             unlabeled_negative_losses = 1-F.sigmoid(self.beta*(real_kl-generated_logratios))
-            policy_losses = torch.clamp(expert_negative_losses-unlabeled_negative_losses, min=-0.0)
+            policy_losses = torch.clamp(unlabeled_negative_losses-expert_negative_losses, min=-0.0)
             losses = expert_losses + policy_losses
         else:
             raise ValueError(f"Unknown loss type: {self.loss_type}. Should be one of ['sigmoid', 'hinge', 'kto_pair', 'nnpu']")
