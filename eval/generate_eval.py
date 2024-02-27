@@ -19,9 +19,11 @@ def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--exp_name", type=str,  required=True)
-    parser.add_argument('--model', type=str, default='DatPySci/pythia-1b-kto-iter0')
-    parser.add_argument("--ref_model", type=str, default='DatPySci/pythia-1b-spin-iter0')
+    parser.add_argument('--model', type=str, default='DatPySci/pythia-1b-self-kto-iter0')
+    parser.add_argument("--ref_model", type=str, default='DatPySci/pythia-1b-self-kto-iter1')
     parser.add_argument('--output_dir', type=str, default='eval/results')
+    parser.add_argument('--candidate_key', type=str, default='output')
+    parser.add_argument('--baseline_key', type=str, default='reference')
     parser.add_argument('--world_size', type=int, default=1) # controls the number of gpus vLLM is allowed to use
     return parser.parse_args()
 
@@ -48,7 +50,7 @@ def main():
     prompts_all = ["### Instruction: " + data[idx]['instruction'] + "\n\n### Response: " for idx in range(len(data))]
     prompts_old = [data[idx]['instruction'] for idx in range(len(data))]
     corrects_all = [data[idx]['output'] for idx in range(len(data))]
-
+    
     start=time.time()
 
     #run vllm
@@ -78,8 +80,8 @@ def main():
         for idx in range(len(corrects_all)):
             alpaca_formatted_examples.append({
                 'instruction': prompts_old[idx],
-                "kto-nnpu": results[idx].strip(),
-                "spin": results_ref[idx].strip()
+                args.candidate_key: results[idx].strip(),
+                args.baseline_key: results_ref[idx].strip()
             })
 
     # collecting data
@@ -87,8 +89,8 @@ def main():
         for idx in range(len(corrects_all)):
             alpaca_formatted_examples.append({
                 'instruction': prompts_old[idx],
-                "kto-nnpu": results[idx].strip(),
-                "spin": corrects_all[idx].strip()
+                args.candidate_key: results[idx].strip(),
+                args.baseline_key: corrects_all[idx].strip()
             })
     fn = os.path.join(str(output_dir), f'alpaca_{args.exp_name}.json')
     json.dump(alpaca_formatted_examples, open(fn, 'w'), indent=2)

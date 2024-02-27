@@ -68,7 +68,7 @@ def main():
     results = [r.replace("</s>","").lstrip() for r in results_gathered]
 
     timediff=time.time()-start
-    print(f"time elapsed: {timediff}")
+    print(f"time elapsed: {timediff}s")
 
     # collecting data
     for idx in range(len(corrects_all)):

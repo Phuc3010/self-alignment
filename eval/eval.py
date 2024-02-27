@@ -171,7 +171,7 @@ def main():
     parser.add_argument('--seed', '-s', help="seed for GPT eval", type=int, default=0)
     parser.add_argument('--sleep_time', '-st', help="how long to sleep to prevent rate limit hit", type=int, default=1.0)
     parser.add_argument('--verbose', '-v', help="detailed outputs", type=bool, default=True)
-    parser.add_argument('--results_file', '-r', help="JSONL file to append to", type=str, default='results.jsonl')
+    parser.add_argument('--results_file', '-r', help="JSONL file to append to", type=str, default='eval/results/results.jsonl')
     parser.add_argument("--candidate_key", '-c', default="output")
     parser.add_argument("--baseline_key",'-b', default="reference")
     parser.add_argument('--judge', '-j', help="version of GPT-4 used as judge", type=str, default='gpt-3.5-turbo-0613')
@@ -187,6 +187,7 @@ def main():
         human_prefix="\n<|user|>\n",
         assistant_prefix="\n<|assistant|>\n"
     )
+    
     encoding = tiktoken.get_encoding("cl100k_base")
     i = 0
     lengths = defaultdict(list)

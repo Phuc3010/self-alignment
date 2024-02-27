@@ -448,12 +448,13 @@ class SPINTrainer(Trainer):
                 0,
             )
         elif self.loss_type == "nnpu":
+            prior = 0.25
             real_kl = (policy_real_logps-opponent_real_logps).mean().clamp(min=0)
             generated_kl = (policy_generated_logps-opponent_generated_logps).mean().clamp(min=0)
             real_logratios = policy_real_logps - opponent_real_logps
             generated_logratios = policy_generated_logps - opponent_generated_logps
-            expert_losses = 0.5*(1 - F.sigmoid(self.beta*(real_logratios-generated_kl)))
-            expert_negative_losses = 0.5*(1-F.sigmoid(self.beta*(generated_kl-real_logratios)))
+            expert_losses = prior*(1 - F.sigmoid(self.beta*(real_logratios-generated_kl)))
+            expert_negative_losses = prior*(1-F.sigmoid(self.beta*(generated_kl-real_logratios)))
             unlabeled_negative_losses = 1-F.sigmoid(self.beta*(real_kl-generated_logratios))
             policy_losses = torch.clamp(expert_negative_losses-unlabeled_negative_losses, min=-0.0)
             losses = expert_losses + policy_losses
