@@ -39,9 +39,8 @@ if is_deepspeed_available():
     import deepspeed
 
 
-class SPINTrainer(Trainer):
+class KTOTrainer(Trainer):
     r"""
-    Initialize SPINTrainer.
 
     Args:
         model (`transformers.PreTrainedModel`):
@@ -107,7 +106,8 @@ class SPINTrainer(Trainer):
         model: Union[PreTrainedModel, nn.Module, str] = None,
         ref_model: Optional[Union[PreTrainedModel, nn.Module, str]] = None,
         beta: float = 0.1,
-        loss_type: Literal["sigmoid", "hinge", "kto_pair", "nnpu"] = "sigmoid",
+        loss_type: Literal["kto_pair", "nnpu"] = "sigmoid",
+        prior: int=0.5,
         args: TrainingArguments = None,
         data_collator: Optional[DataCollator] = None,
         label_pad_token_id: int = -100,
@@ -294,6 +294,7 @@ class SPINTrainer(Trainer):
         self.generate_during_eval = generate_during_eval
         self.label_pad_token_id = label_pad_token_id
         self.padding_value = padding_value
+        self.prior = prior
 
         self.beta = beta
         self.loss_type = loss_type
@@ -431,11 +432,7 @@ class SPINTrainer(Trainer):
 
         logits = pi_logratios - ref_logratios
 
-        if self.loss_type == "sigmoid":
-            losses = -F.logsigmoid(self.beta * logits)
-        elif self.loss_type == "hinge":
-            losses = torch.relu(1 - self.beta * logits)
-        elif self.loss_type == "kto_pair":
+        if self.loss_type == "kto_pair":
             real_kl = (policy_real_logps-opponent_real_logps).mean().clamp(min=0)
             generated_kl = (policy_generated_logps-opponent_generated_logps).mean().clamp(min=0)
             real_logratios = policy_real_logps - opponent_real_logps
@@ -448,13 +445,12 @@ class SPINTrainer(Trainer):
                 0,
             )
         elif self.loss_type == "nnpu":
-            prior = 0.5
             real_kl = (policy_real_logps-opponent_real_logps).mean().clamp(min=0)
             generated_kl = (policy_generated_logps-opponent_generated_logps).mean().clamp(min=0)
             real_logratios = policy_real_logps - opponent_real_logps
             generated_logratios = policy_generated_logps - opponent_generated_logps
-            expert_losses = prior*(1 - F.sigmoid(self.beta*(real_logratios-generated_kl)))
-            expert_negative_losses = prior*(1-F.sigmoid(self.beta*(generated_kl-real_logratios)))
+            expert_losses = self.prior*(1 - F.sigmoid(self.beta*(real_logratios-generated_kl)))
+            expert_negative_losses = self.prior*(1-F.sigmoid(self.beta*(generated_kl-real_logratios)))
             unlabeled_negative_losses = 1-F.sigmoid(self.beta*(real_kl-generated_logratios))
             policy_losses = torch.clamp(unlabeled_negative_losses-expert_negative_losses, min=-0.0)
             losses = expert_losses + policy_losses

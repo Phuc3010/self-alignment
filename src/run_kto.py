@@ -12,7 +12,7 @@ from accelerate import Accelerator
 
 from alignment import (
     DataArguments,
-    SPINConfig,
+    KTOConfig,
     get_checkpoint,
     H4ArgumentParser,
     ModelArguments,
@@ -21,10 +21,10 @@ from alignment import (
     get_peft_config,
     get_quantization_config,
     get_tokenizer,
+    KTOTrainer,
     is_adapter_model,
 )
 from peft import PeftConfig, PeftModel
-from src.alignment import SPINTrainer
 from torch.utils.data import Subset
 import re
 
@@ -63,7 +63,7 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    parser = H4ArgumentParser((ModelArguments, DataArguments, SPINConfig))
+    parser = H4ArgumentParser((ModelArguments, DataArguments, KTOConfig))
     model_args, data_args, training_args = parser.parse()
 
     #######
@@ -161,7 +161,7 @@ def main():
     # Instantiate spin trainer
     #########################
     print(f"Loss type: {training_args.loss_type}")
-    spin_trainer = SPINTrainer(
+    spin_trainer = KTOTrainer(
         model,
         ref_model,
         model_init_kwargs=model_kwargs,
