@@ -328,7 +328,7 @@ class SPINTrainer(Trainer):
             if self.is_deepspeed_enabled:
                 self.ref_model = self._prepare_deepspeed(self.ref_model)
             else:
-                self.ref_model = self.accelerator.prepare_model(self.ref_model, evaluation_mode=True)
+                self.ref_model = self.accelerator.prepare_model(self.ref_model, evaluation_mode=False)
 
     def _prepare_deepspeed(self, model: PreTrainedModelWrapper):
         # Adapted from accelerate: https://github.com/huggingface/accelerate/blob/739b135f8367becb67ffaada12fe76e3aa60fefd/src/accelerate/accelerator.py#L1473
@@ -448,7 +448,7 @@ class SPINTrainer(Trainer):
                 0,
             )
         elif self.loss_type == "nnpu":
-            prior = 0.25
+            prior = 0.5
             real_kl = (policy_real_logps-opponent_real_logps).mean().clamp(min=0)
             generated_kl = (policy_generated_logps-opponent_generated_logps).mean().clamp(min=0)
             real_logratios = policy_real_logps - opponent_real_logps

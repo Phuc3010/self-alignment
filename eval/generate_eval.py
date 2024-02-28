@@ -19,12 +19,12 @@ def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--exp_name", type=str,  required=True)
-    parser.add_argument('--model', type=str, default='DatPySci/pythia-1b-self-kto-iter0')
-    parser.add_argument("--ref_model", type=str, default='DatPySci/pythia-1b-self-kto-iter1')
+    parser.add_argument('--model', type=str, default='alignment-handbook/zephyr-7b-sft-full')
+    parser.add_argument("--ref_model", type=str, default=None)
     parser.add_argument('--output_dir', type=str, default='eval/results')
     parser.add_argument('--candidate_key', type=str, default='output')
     parser.add_argument('--baseline_key', type=str, default='reference')
-    parser.add_argument('--world_size', type=int, default=1) # controls the number of gpus vLLM is allowed to use
+    parser.add_argument('--world_size', type=int, default=8) # controls the number of gpus vLLM is allowed to use
     return parser.parse_args()
 
 def main():
