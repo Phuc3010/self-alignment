@@ -176,39 +176,7 @@ def main():
         max_prompt_length=training_args.max_prompt_length,
         peft_config=get_peft_config(model_args),
     )
-    # train_loader = spin_trainer.get_train_dataloader()
-    # import torch.nn.functional as F
-    # all_values = []
-    # from tqdm import tqdm
-    # import numpy as np
-
-    # with torch.no_grad():
-    #     loader = tqdm(train_loader)
-    #     for batch in tqdm(train_loader):
-    #         (
-    #             policy_real_logps,
-    #             policy_generated_logps,
-    #             policy_real_logits,
-    #             policy_generated_logits,
-    #         ) = spin_trainer.concatenated_forward(spin_trainer.model, batch)
-    #         with torch.no_grad():
-    #             (
-    #                 opponent_real_logps,
-    #                 opponent_generated_logps,
-    #                 _,
-    #                 _,
-    #             ) = spin_trainer.concatenated_forward(spin_trainer.ref_model, batch)
-            
-    #         real_kl = (policy_real_logps-opponent_real_logps).mean().clamp(min=0)
-    #         generated_logratios = policy_generated_logps - opponent_generated_logps
-    #         # values = F.sigmoid(spin_trainer.beta*(real_logratios-generated_kl))
-    #         negative_values = F.sigmoid(spin_trainer.beta*(generated_logratios-real_kl))
-    #         batch_values = negative_values.cpu().tolist()
-    #         all_values.extend(batch_values)
-    #         loader.set_postfix(batch_probs=np.mean(batch_values), moving_probs=np.mean(all_values))
-    #     print(sum(all_values)/len(all_values))
-    #     print(np.var(all_values))
-
+    
     ###############
     # Training loop
     ###############
