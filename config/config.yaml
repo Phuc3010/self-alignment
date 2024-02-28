@@ -30,7 +30,7 @@ optim: rmsprop
 output_dir: data/model/zephyr-7b-kto-iter0
 per_device_train_batch_size: 8
 per_device_eval_batch_size: 4
-push_to_hub: false
+push_to_hub: true
 save_strategy: "epoch"
 loss_type: "nnpu"
 save_total_limit: null
