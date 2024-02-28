@@ -461,7 +461,42 @@ class KTOTrainer(Trainer):
         generated_rewards = self.beta * (policy_generated_logps - opponent_generated_logps).detach()
 
         return losses, real_rewards, generated_rewards
+    
+    def prior_estimation(self, verbose=True):
+        train_loader= self.get_train_dataloader()
+        all_values = []
+        from tqdm import tqdm
+        import numpy as np
 
+        with torch.no_grad():
+            if verbose:
+                train_loader = tqdm(train_loader, desc="Estimating class prior: ")
+            for batch in train_loader:
+                (
+                    policy_real_logps,
+                    policy_generated_logps,
+                    policy_real_logits,
+                    policy_generated_logits,
+                ) = self.concatenated_forward(self.model, batch)
+
+                (
+                    opponent_real_logps,
+                    opponent_generated_logps,
+                    _,
+                    _,
+                ) = self.concatenated_forward(self.ref_model, batch)
+                
+                real_kl = (policy_real_logps-opponent_real_logps).mean().clamp(min=0)
+                generated_logratios = policy_generated_logps - opponent_generated_logps
+                # values = F.sigmoid(spin_trainer.beta*(real_logratios-generated_kl))
+                negative_values = F.sigmoid(self.beta*(generated_logratios-real_kl))
+                batch_values = negative_values.cpu().tolist()
+                all_values.extend(batch_values)
+                if verbose:
+                    train_loader.set_postfix(batch_probs=np.mean(batch_values), moving_probs=np.mean(all_values))
+            estimated_prior = sum(all_values)/len(all_values)
+            self.prior = estimated_prior
+ 
     def _get_batch_logps(
         self,
         logits: torch.FloatTensor,
