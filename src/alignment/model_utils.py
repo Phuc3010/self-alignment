@@ -25,7 +25,7 @@ from huggingface_hub import list_repo_files
 from huggingface_hub.utils._validators import HFValidationError
 from peft import LoraConfig, PeftConfig
 
-from .configs import DataArguments, DPOConfig, ModelArguments, SFTConfig
+from .configs import DataArguments, ModelArguments, SFTConfig
 from .data import DEFAULT_CHAT_TEMPLATE
 
 

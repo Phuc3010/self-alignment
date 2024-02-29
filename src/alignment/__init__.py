@@ -1,6 +1,6 @@
 __version__ = "0.3.0.dev0"
 
-from .configs import DataArguments, DPOConfig, H4ArgumentParser, ModelArguments, SFTConfig, KTOConfig
+from .configs import DataArguments, H4ArgumentParser, ModelArguments, SFTConfig, KTOConfig
 from .data import apply_chat_template, get_datasets, process_data_ultrachat
 from .trainer import KTOTrainer
 from .model_utils import (
