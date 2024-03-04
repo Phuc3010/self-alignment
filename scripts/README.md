@@ -1,6 +1,6 @@
 # Scripts to Train and Evaluate Chat Models
 ## Step 1: Reformat data
-This step reformat the UltraChat 200k dataset from multi-turn conversation into single-turn as the prompt and ground truh responses. The output formatted will be save in `--output_dir`. This step only need to one time at iter 0.
+This step reformat the UltraChat 200k dataset from multi-turn conversation into single-turn as the prompt and ground truh responses. The output formatted will be save in `--output_dir`. This step only need to run one time at iter 0.
 ```shell
 python3 src/reformat.py [options]
 ```
@@ -26,7 +26,7 @@ Options for
 - `--output_dir`: Directoty to save the output data.
     - default: `generated/iter0`
 - `--data_frac`: break full data into fractions for generations (Generate a fraction of full data with `--frac_len` samples per fraction). This helps to generate data by small batches to avoid unexpected crashes as data generation can be very time-consuming.
-- `--frac_len`: Length of the data fraction. If it is 0 which uses the entier dataset for generation.
+- `--frac_len`: Length of the data fraction. If it is 0 which uses the entier dataset for generation. If not specified, it will generate 50_000 respones. According to the paper, this should be set at `50_000` at iter0 and `100_000` for subsequent iterations.
 - `--split`: choose the split for data generation.
     - default: `train`
     
