@@ -1,1 +1,1 @@
-ACCELERATE_LOG_LEVEL=info accelerate launch --config_file config/multi_gpu.yaml --num_processes=1 --main_process_port 2950 src/run_sft.py config/config_sft.yaml
+ACCELERATE_LOG_LEVEL=info accelerate launch --config_file config/multi_gpu.yaml --num_processes=1 --main_process_port 2950 src/run_kto.py config/config.yaml
