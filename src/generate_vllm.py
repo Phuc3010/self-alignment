@@ -41,6 +41,7 @@ def main():
     llm = LLM(
         model=model_path,
         tensor_parallel_size=world_size,
+        max_model_len=2048
     )
 
     sampling_params = SamplingParams(temperature=1.0, top_p=1.0, max_tokens=256)
@@ -54,6 +55,8 @@ def main():
             data = data[sub_len*data_frac:]['real']
         else:
             data = data[sub_len*data_frac:sub_len*(data_frac+1)]['real']
+    else:
+        data = data[:]['real']
 
     prompts_all = ["### Instruction: " + data[idx][0]['content'] + "\n\n### Response: " for idx in range(len(data))]
     prompts_old = [data[idx][0]['content'] for idx in range(len(data))]
