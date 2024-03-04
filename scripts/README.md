@@ -29,6 +29,7 @@ Options for
 - `--frac_len`: Length of the data fraction. If it is 0 which uses the entier dataset for generation.
 - `--split`: choose the split for data generation.
     - default: `train`
+    
 `src/convert_data.py` will convert the generated data from json format into `.parquet` format for fine-tuning.
 ## Fine-tuning
 ```shell
