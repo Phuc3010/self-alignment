@@ -19,7 +19,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='alignment-handbook/zephyr-7b-sft-full')
     parser.add_argument('--data_frac', type=int, default=0)
-    parser.add_argument('--frac_len', type=int, default=0)
+    parser.add_argument('--frac_len', type=int, default=50_000)
     parser.add_argument('--output_dir', type=str, default='generated/iter0')
     parser.add_argument('--world_size', type=int, default=8) # controls the number of gpus vLLM is allowed to use
     parser.add_argument('--input_dir', type=str, default='generated/synthetic')
