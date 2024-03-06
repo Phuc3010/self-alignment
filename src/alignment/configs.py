@@ -228,7 +228,6 @@ class SFTConfig(transformers.TrainingArguments):
 
 @dataclass
 class KTOConfig(transformers.TrainingArguments):
-
     beta: Optional[float] = field(
         default=0.1,
         metadata={"help": "The beta factor in SPIN loss. Higher beta means less divergence from the initial policy."},
@@ -245,10 +244,33 @@ class KTOConfig(transformers.TrainingArguments):
         default=None,
         metadata={"help": ("The maximum length of the prompt to use for conditioning the model.")},
     )
+    max_completion_length: Optional[int] = field(
+        default=None,
+        metadata={"help": ("The maximum length of the target. This argument is required if you want to use the default data collator and your model is an encoder-decoder.")}
+    )
+    desirable_weight: Optional[float] = field(
+        default=1.0, metadata={"help": ("The desirable losses are weighed by this factor")}
+    )
+    undesirable_weight: Optional[float] = field(
+        default=1.0, metadata={"help": ("The undesirable losses are weighed by this factor")}
+    )
+    truncation_mode: Optional[str] = field(
+        default="keep_end"
+    )
+    model_init_kwargs: Optional[Dict] = field(
+        default=None
+    )
+    ref_model_init_kwargs: Optional[Dict] = field(
+        default=None
+    )
     max_length: Optional[int] = field(
         default=None,
         metadata={"help": ("Used by TRL for reward model training, which tries to read this parameter in init.")},
     )
+    precompute_ref_log_probs: bool = field(
+        default=False
+    )
+    generate_during_eval: bool = field(default=False)
     optim: Optional[str] = field(default="rmsprop")
     remove_unused_columns: bool = field(default=False)
     loss_type: Optional[str] = field(default="sigmoid", metadata={"help": ("The loss type for DPO.")})

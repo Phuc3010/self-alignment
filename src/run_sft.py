@@ -56,7 +56,6 @@ def maybe_insert_system_message(messages, tokenizer):
     if "system" in chat_template:
         messages.insert(0, {"role": "system", "content": ""})
 
-
 def apply_chat_template(
     example,
     tokenizer,
@@ -69,12 +68,11 @@ def apply_chat_template(
     if task in ["sft", "generation"]:
         messages = example["messages"]
         # We add an empty system message if there is none
-        if auto_insert_empty_system_msg:
-            maybe_insert_system_message(messages, tokenizer)
+        maybe_insert_system_message(messages, tokenizer)
         example["text"] = tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True if task == "generation" else False
         )
-        example["text"] = _strip_prefix(example["text_real"], "<|assistant|\n")
+        example["text"] = _strip_prefix(example["text"], "<|assistant|\n")
 
     return example
 
@@ -136,7 +134,6 @@ def main():
         fn_kwargs={
             "tokenizer": tokenizer,
             "task": "sft",
-            "auto_insert_empty_system_msg": data_args.auto_insert_empty_system_msg,
         },
         num_proc=data_args.preprocessing_num_workers,
         remove_columns=column_names,
@@ -181,7 +178,6 @@ def main():
         dataset_text_field="text",
         max_seq_length=training_args.max_seq_length,
         tokenizer=tokenizer,
-        packing=True,
         peft_config=get_peft_config(model_args),
     )
 

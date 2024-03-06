@@ -1,234 +1,111 @@
-import openai
-import random
-import numpy as np
-import time
-import tiktoken
 import json
-import signal
-import os
-import re
-from dataclasses import dataclass
-from scipy.stats import binomtest, binom
-from tqdm import tqdm
-from math import ceil, floor
-from typing import Dict, Tuple
-from collections import defaultdict
-from datetime import datetime
+import numpy as np
+import torch
 from transformers import AutoTokenizer
+from collections import defaultdict
+from llm_blender.pair_ranker.pairrm import DebertaV2PairRM
+from datetime import datetime
+import os
 import argparse
+from tqdm import tqdm
+import glob
+from typing import List
 
+def tokenize_pair(sources:List[str], candidate1s:List[str], candidate2s:List[str], source_max_length=1124, candidate_max_length=512):
+    ids = []
+    assert len(sources) == len(candidate1s) == len(candidate2s)
+    max_length = source_max_length + 2 * candidate_max_length
+    for i in range(len(sources)):
+        source_ids = tokenizer.encode(source_prefix + sources[i], max_length=source_max_length, truncation=True)
+        candidate_max_length = (max_length - len(source_ids)) // 2
+        candidate1_ids = tokenizer.encode(cand1_prefix + candidate1s[i], max_length=candidate_max_length, truncation=True)
+        candidate2_ids = tokenizer.encode(cand2_prefix + candidate2s[i], max_length=candidate_max_length, truncation=True)
+        ids.append(source_ids + candidate1_ids + candidate2_ids)
+    encodings = tokenizer.pad({"input_ids": ids}, return_tensors="pt", padding="max_length", max_length=max_length)
+    return encodings
+
+def load_model_answers(answer_dir: str, task: str, model_list: List=None):
+    filenames = glob.glob(os.path.join(answer_dir, "*.json"))
+    filenames.sort()
+    model_answers = {}
+
+    for filename in filenames:
+        task_file, model_name = os.path.basename(filename).split(".json")[0].split("_")
+        answer = {}
+        if task_file == task:
+            if model_list is not None and model_name not in model_list: 
+                continue
+            data = json.load(open(filename))
+            answer["inputs"] = [data[idx]['instruction'] for idx in range(len(data))]
+            answer["candidate_texts"] = [[data[idx][model_name], data[idx]["reference"]] for idx in range(len(data))]
+            model_answers[model_name] = answer
     
-client = openai.OpenAI(
-    # api_key="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"
-    api_key="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"
-    # api_key="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"
-)
+    return model_answers
 
-class APITimeoutException(Exception):
-    pass
-
-@dataclass
-class PromptTemplate:
-    """
-    Prompt generator for comparing the outputs of any number of models using GPT-4 as a judge.
-    """
-    models: Tuple[str]  # list of models under consideration
-    labels: str         # list of labels to assign to models (e.g., "12345")
-    seed: int           # random seed 
-    verbose: bool
-    human_prefix: str="\n<|user|>\n"
-    assistant_prefix: str="\n<|assistant|>\n"   # Tulu format; modify as needed
-
-    def __post_init__(self):
-        random.seed(self.seed)
-
-    def shuffle(self):
-        """
-        Shuffle the list of models under consideration. This is to correct for any bias GPT-4 might have
-        in picking the first/last response.
-        """
-        random.shuffle(self.models)
-
-    def clean_response(self, response):
-        """
-        Truncate any hanging sentence (not ending in a ?!.) and return the cleaned response.
-        """
-        match = re.search(r'[.!?](?=[^.!?]*$)', response)
-        if match:
-            return response[:match.start() + 1]
-        else:
-            return response
-
-    def format(self, history: str, samples: Dict[str, str]) -> str:
-        """
-        Format samples into a given prompt. Overwrite in subclass as needed.
-
-        Args:
-        - history: the input/instruction
-        - samples: a dictionary mapping models to their generations
-
-        Returns:
-            A list of messages to send to the GPT-4 API. Each item is a dictionary containing the role of the speaker
-            and the candidate text.
-        """
-        self.shuffle()
-        history = history[:history.rfind(self.assistant_prefix)].strip()
-
-        messages = [{"role": "user", "content": f"Here is a conversation between {self.human_prefix.strip()} and {self.assistant_prefix.strip()}.\n\n" + history }]
-        prompt = [f'{self.assistant_prefix.strip()} can now choose from different responses.']
-
-        for i,m in enumerate(self.models):
-            response = self.clean_response(samples[m])
-            prompt.append(f'Response {self.labels[i]}: {response}\nEND OF RESPONSE {self.labels[i]}')
-
-        prompt.append("Between these two responses, which response is more helpful, harmless, and concise? Pick one.")
-
-        messages.append({
-            "role": "user",
-            "content": "\n\n".join(prompt),
-        })
-
-        return messages
-
-    def get_model_choice_from_response(self, response) -> str:
-        """
-        Given a response from the GPT-4 evaluator, identify and return the model it chose.
-
-        Args:
-        - response: response from calling GPT-4 API
-
-        Returns:
-            One of the models in self.models (or None if LLM judge's choice cannot be inferred).
-        """
-        completion = response.choices[0].message.content
-        answer = re.search(r'response (.).*', completion, re.IGNORECASE)
-
-        if self.verbose:
-            print(completion)
-        
-        if answer is None:
-            return None
-
-        idx = self.labels.index(answer.group(1))
-        return self.models[idx]
-        
-
-def get_preferred_model(history: str, samples: Dict[str, str], prompt_template: PromptTemplate, judge: str, rate_limit_size: int=1000) -> str:
-    """
-    Find the model whose generation is most preferred by the judge.
-
-    Args:
-    - history: prompt used to condition generations
-    - samples: generations for the given history, indexed by model name
-    - prompt_template: instance of PromptTemplate
-    - judge: one of the OpenAI chat models
-    - rate_limit_size: maximum number of characters that can be in any message to avoid rate limit problem (tokens is ~ 1/3 of chars)
-
-    Returns:
-        The name of the more preferred model.
-    """
-    # Set up a timeout handler
-    def timeout_handler(signum, frame):
-        """Handler for when OpenAI call takes too long."""
-        raise APITimeoutException("API call took too long")
-    signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(10)
-
-    try:
-        response = client.chat.completions.create( 
-            model=judge,
-            messages=prompt_template.format(history, samples),
-            temperature=0,
-            max_tokens=8,
-            seed=prompt_template.seed,
-        )
-
-        signal.alarm(0)  # Cancel the alarm since the call completed within the timeout 
-        return prompt_template.get_model_choice_from_response(response)
-    except ValueError:
-        print("The chosen response could not be determined.")
-        pass
-    except APITimeoutException:
-        pass
-    except openai.APIConnectionError as e:
-        print("The server could not be reached.")
-        print(e.__cause__)  # an underlying Exception, likely raised within httpx.
-    except openai.RateLimitError as e:
-        print("A 429 status code was received; we should back off a bit.")
-        signal.alarm(0)
-        time.sleep(5)
-    except openai.APIStatusError as e:
-        print("Another non-200-range status code was received")
-        print(e.response)
-    finally:
-        signal.alarm(0) 
-    
-    return None
- 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--file', '-f', help="JSON file with the generated samples; list of dicts containing candidate, baseline, and history as keys", type= str)
-    parser.add_argument('--seed', '-s', help="seed for GPT eval", type=int, default=0)
-    parser.add_argument('--sleep_time', '-st', help="how long to sleep to prevent rate limit hit", type=int, default=1.0)
-    parser.add_argument('--verbose', '-v', help="detailed outputs", type=bool, default=True)
-    parser.add_argument('--results_file', '-r', help="JSONL file to append to", type=str, default='eval/results/results.jsonl')
-    parser.add_argument("--candidate_key", '-c', default="output")
-    parser.add_argument("--baseline_key",'-b', default="reference")
-    parser.add_argument('--judge', '-j', help="version of GPT-4 used as judge", type=str, default='gpt-3.5-turbo-0613')
-    parser.add_argument('--labels', '-l', help="used to enumerate the responses being compared in the GPT-4 API call (e.g., Response 1, Response A)", type=str, default='12')
-
-    args = parser.parse_args()
-    samples = json.load(open(args.file))
-    prompt_template = PromptTemplate(
-        [args.candidate_key, args.baseline_key],
-        args.labels, 
-        args.seed,
-        verbose=args.verbose,
-        human_prefix="\n<|user|>\n",
-        assistant_prefix="\n<|assistant|>\n"
-    )
-    
-    encoding = tiktoken.get_encoding("cl100k_base")
-    i = 0
-    lengths = defaultdict(list)
-    wins = defaultdict(lambda: 0)
-    for batch in tqdm(samples):
-        lengths[args.candidate_key].append(len(encoding.encode(batch[args.candidate_key])))
-        lengths[args.baseline_key].append(len(encoding.encode(batch[args.baseline_key])))
-        time.sleep(args.sleep_time)
-        choice = get_preferred_model(batch["instruction"], batch, prompt_template, judge=args.judge)
-        i += 1
-        if choice is not None:
-            wins[choice] += 1
-        if args.verbose:
-            print(wins, 'of', i, { k: np.mean(lengths[k]) for k in lengths })
-
-    f = args.file
-    l_index = f.find("alpaca_")
-    r_index = f.find(".json")
-    exp_name = f[l_index:r_index]
-    results = {
-        'date': str(datetime.now()),
-        'total': i,
-        'seed': args.seed,
-        'exp_name': exp_name,
-        'judge' : args.judge,
-        'candidate': {
-            'name': args.candidate_key,
-            'wins': wins[args.candidate_key],
-            'lengths': lengths[args.candidate_key],
-        },
-        'baseline': {
-            'name': args.baseline_key,
-            'wins': wins[args.baseline_key],
-            'lengths': lengths[args.baseline_key],
-        },
-    }
-
-    with open(args.results_file, 'a+') as f:
-        json.dump(results, f)
-        f.write('\n')
-    print(wins)
 
 if __name__=="__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--judge_model", type=str, default="llm-blender/PairRM-hf")
+    parser.add_argument("--task", type=str, default="alpaca")
+    parser.add_argument("--result_dir", type=str, default="eval/results")
+    parser.add_argument(
+        "--model_list",
+        type=str,
+        nargs="+",
+        default=None,
+        help="A list of models to be evaluated",
+    )
+    args = parser.parse_args()
+    source_prefix = "<|source|>"
+    cand1_prefix = "<|candidate1|>"
+    cand2_prefix = "<|candidate2|>"
+    model_answers = load_model_answers(args.result_dir, args.task, args.model_list)
+    pairrm = DebertaV2PairRM.from_pretrained(args.judge_model, device_map="cuda:0", torch_dtype=torch.bfloat16).eval()
+    tokenizer = AutoTokenizer.from_pretrained(args.judge_model)
+
+    wins = defaultdict(lambda: 0)
+    score_diff = defaultdict(list)
+    with torch.no_grad():
+        for model in list(model_answers.keys()):
+            inputs = model_answers[model]['inputs']
+            candidate_texts = model_answers[model]['candidate_texts']
+            batch_size = 32
+            for i in tqdm(range(0, len(inputs), batch_size), desc=f"Evaluate {model}"):
+                batch_inputs = inputs[i:i+batch_size]
+                batch_candidate_texts = candidate_texts[i:i+batch_size]
+                candidates_A = [ele[0] for ele in batch_candidate_texts]
+                candidates_B = [ele[1] for ele in batch_candidate_texts]
+                encodings = tokenize_pair(batch_inputs, candidates_A, candidates_B)
+                encodings = {k:v.to(pairrm.device) for k,v in encodings.items()}
+                outputs = pairrm(**encodings)
+                score = outputs.logits.tolist()
+                score_diff[model].extend(score)
+                comparison_results = (outputs.logits > 0).tolist()
+                for ele in comparison_results:
+                    if ele == True:
+                        wins[model] += 1
+                    else:
+                        wins["reference"] += 1
+
+            results = {
+                'date': str(datetime.now()),
+                'total': len(inputs),
+                'task': args.task,
+                'judge' : args.judge_model,
+                'candidate': {
+                    'name': model,
+                    'wins': wins[model],
+                    'score_diff': np.mean(score_diff[model])
+                },
+                'baseline': {
+                    'name': "reference",
+                    'wins': wins["reference"],
+                    "score_diff": -np.mean(score_diff[model])
+                },
+            }
+            wins = defaultdict(lambda: 0)
+            score_diff = defaultdict(list)
+
+            with open(os.path.join(args.result_dir, "results.jsonl"), 'a+') as f:
+                json.dump(results, f)
+                f.write('\n')
