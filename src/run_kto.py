@@ -3,7 +3,7 @@
 # Adapted from https://github.com/huggingface/alignment-handbook 
 import logging
 import sys
-
+from tqdm import tqdm
 import torch
 import transformers
 from transformers import AutoModelForCausalLM, set_seed
@@ -34,7 +34,7 @@ def apply_chat_template(
     def _strip_prefix(s, pattern):
         # Use re.escape to escape any special characters in the pattern
         return re.sub(f"^{re.escape(pattern)}", "", s)
-
+    
     if all(k in example.keys() for k in ("real", "generated")):
         # Compared to reward modeling, we filter out the prompt, so the text is everything after the last assistant token
         prompt_messages = [[msg for msg in example["real"] if msg["role"] == "user"][0]]
@@ -58,6 +58,40 @@ def apply_chat_template(
             f"Require `[real, generated]` keys but found {list(example.keys())}"
             )
     return example
+
+def get_flat_data(raw_datasets, split, tokenizer):
+    def _strip_prefix(s, pattern):
+        # Use re.escape to escape any special characters in the pattern
+        return re.sub(f"^{re.escape(pattern)}", "", s)
+
+    flat_data = {
+        "prompt": [],
+        "completion": [],
+        "label": []
+    }
+
+    dataset = raw_datasets[split]
+
+    for sample in tqdm(dataset, desc="Formatting data for KTO"):
+        prompt = sample['real'][0]
+        prompt = tokenizer.apply_chat_template(
+            prompt, tokenize=False, add_generation_prompt=True
+        )
+        flat_data["prompt"].append(prompt)
+        real_messages = sample['real'][1:]
+        flat_data['completion'].append(_strip_prefix(tokenizer.apply_chat_template(
+            real_messages, tokenize=False
+        ), "<|assistant|>\n"))
+        flat_data["label"].append(True)
+
+        flat_data["prompt"].append(prompt)
+        generated_messages = sample['generated'][1:]
+        flat_data['completion'].append(_strip_prefix(tokenizer.apply_chat_template(
+            generated_messages, tokenize=False
+        ), "<|assistant|>\n"))
+        flat_data["label"].append(False)
+
+    return dataset.from_dict(flat_data)
 
 logger = logging.getLogger(__name__)
 
@@ -112,31 +146,14 @@ def main():
     #####################
     # Apply chat template
     #####################
-    raw_datasets = raw_datasets.map(
-        apply_chat_template,
-        fn_kwargs={"tokenizer": tokenizer, "task": "spin"},
-        num_proc=data_args.preprocessing_num_workers,
-        remove_columns=column_names,
-        desc="Formatting comparisons with prompt template",
-    )
-
-    # Replace column names with what TRL needs, text_real -> real and text_generated -> generated
-    for split in ["train", "test"]:
-        raw_datasets[split] = raw_datasets[split].rename_columns(
-            {"text_prompt": "prompt", "text_real": "real", "text_generated": "generated"}
-        )
+    train_dataset = get_flat_data(raw_datasets, "train", tokenizer)
+    eval_dataset = get_flat_data(raw_datasets, "test", tokenizer)
+    print(train_dataset[0])
 
     torch_dtype = (
         model_args.torch_dtype if model_args.torch_dtype in ["auto", None] else getattr(torch, model_args.torch_dtype)
     )
     quantization_config = get_quantization_config(model_args)
-
-    # if training_args.bf16:
-    #     torch_dtype = torch.bfloat16
-    #     training_args.bf16 = False
-    # elif training_args.fp16:
-    #     torch_dtype = torch.float16
-    #     training_args.fp16 = False
 
     model_kwargs = dict(
         revision=model_args.model_revision,
@@ -153,27 +170,23 @@ def main():
     ref_model = model
     ref_model_kwargs = model_kwargs
 
+
     if model_args.use_peft is True:
         ref_model = None
-        ref_model_kwargs = None
 
     #########################
     # Instantiate spin trainer
     #########################
     print(f"Loss type: {training_args.loss_type}")
-    spin_trainer = KTOTrainer(
+    kto_trainer = KTOTrainer(
         model,
         ref_model,
         model_init_kwargs=model_kwargs,
-        loss_type=training_args.loss_type,
         ref_model_init_kwargs=ref_model_kwargs,
         args=training_args,
-        beta=training_args.beta,
-        train_dataset=raw_datasets["train"],
-        eval_dataset=raw_datasets["test"],
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
         tokenizer=tokenizer,
-        max_length=training_args.max_length,
-        max_prompt_length=training_args.max_prompt_length,
         peft_config=get_peft_config(model_args),
     )
     
@@ -185,23 +198,23 @@ def main():
         checkpoint = training_args.resume_from_checkpoint
     elif last_checkpoint is not None:
         checkpoint = last_checkpoint
-    train_result = spin_trainer.train(resume_from_checkpoint=checkpoint)
+    train_result = kto_trainer.train(resume_from_checkpoint=checkpoint)
 
     metrics = train_result.metrics
     # max_train_samples = (
     #     data_args.max_train_samples if data_args.max_train_samples is not None else len(raw_datasets["train"])
     # )
     # metrics["train_samples"] = min(max_train_samples, len(raw_datasets["train"]))
-    spin_trainer.log_metrics("train", metrics)
-    spin_trainer.save_metrics("train", metrics)
-    spin_trainer.save_state()
+    kto_trainer.log_metrics("train", metrics)
+    kto_trainer.save_metrics("train", metrics)
+    kto_trainer.save_state()
 
     logger.info("*** Training complete ***")
 
     ##################################
     # Save model and create model card
     ##################################
-    # spin_trainer.save_model(training_args.output_dir)
+    # kto_trainer.save_model(training_args.output_dir)
     # Save everything else on main process
     
     kwargs = {
@@ -211,14 +224,14 @@ def main():
             "tags": ["alignment-handbook"],
     }
     if accelerator.is_main_process:
-        spin_trainer.create_model_card(**kwargs)
+        kto_trainer.create_model_card(**kwargs)
         # Restore k,v cache for fast inference
-        spin_trainer.model.config.use_cache = True
-        spin_trainer.model.config.save_pretrained(training_args.output_dir)
+        kto_trainer.model.config.use_cache = True
+        kto_trainer.model.config.save_pretrained(training_args.output_dir)
 
     if training_args.push_to_hub is True:
         logger.info("Pushing to hub...")
-        spin_trainer.push_to_hub(**kwargs)
+        kto_trainer.push_to_hub(**kwargs)
 
     # Ensure we don't timeout on model save / push to Hub
     logger.info("*** Waiting for all processes to finish ***")
