@@ -1,9 +1,9 @@
-export CUDA_VISIBLE_DEVICES="4,5"
+export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 
 #!/bin/bash
 priors=("0.1" "0.2" "0.3" "0.4" "0.5" "0.6" "0.7")
 epochs=("1" "2")
-SCRIPT_COMMAND="ACCELERATE_LOG_LEVEL=info accelerate launch --config_file config/deepspeed_zero2.yaml --num_processes=2 --main_process_port 2950 src/run_kto.py config/config.yaml --prior="
+SCRIPT_COMMAND="ACCELERATE_LOG_LEVEL=info accelerate launch --config_file config/deepspeed_zero2.yaml --num_processes=8 --main_process_port 2950 src/run_kto.py config/config.yaml --prior="
 
 # Loop through different prior values
 for epoch in "${epochs[@]}"; do
