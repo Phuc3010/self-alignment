@@ -59,41 +59,6 @@ def apply_chat_template(
             )
     return example
 
-def get_flat_data(raw_datasets, split, tokenizer):
-    def _strip_prefix(s, pattern):
-        # Use re.escape to escape any special characters in the pattern
-        return re.sub(f"^{re.escape(pattern)}", "", s)
-
-    flat_data = {
-        "prompt": [],
-        "completion": [],
-        "label": []
-    }
-
-    dataset = raw_datasets[split]
-
-    for sample in tqdm(dataset, desc="Formatting data for KTO"):
-
-        prompt = sample['real'][0]
-        prompt = tokenizer.apply_chat_template(
-            prompt, tokenize=False, add_generation_prompt=True
-        )
-        flat_data["prompt"].append(prompt)
-        real_messages = sample['real'][1:]
-        flat_data['completion'].append(_strip_prefix(tokenizer.apply_chat_template(
-            real_messages, tokenize=False
-        ), "<|assistant|>\n"))
-        flat_data["label"].append(True)
-
-        flat_data["prompt"].append(prompt)
-        generated_messages = sample['generated'][1:]
-        flat_data['completion'].append(_strip_prefix(tokenizer.apply_chat_template(
-            generated_messages, tokenize=False
-        ), "<|assistant|>\n"))
-        flat_data["label"].append(False)
-
-    return dataset.from_dict(flat_data)
-
 logger = logging.getLogger(__name__)
 
 
@@ -123,7 +88,6 @@ def main():
     logger.info(f"Training/evaluation parameters {training_args}")
 
     # Set seed for reproducibility
-    set_seed(training_args.seed)
     last_checkpoint = get_checkpoint(training_args)
     if last_checkpoint is not None and training_args.resume_from_checkpoint is None:
         logger.info(f"Checkpoint detected, resuming training at {last_checkpoint=}.")
@@ -149,9 +113,20 @@ def main():
     #####################
     # Apply chat template
     #####################
-    train_dataset = get_flat_data(raw_datasets, "train", tokenizer)
-    eval_dataset = get_flat_data(raw_datasets, "test", tokenizer)
-    print(train_dataset[0])
+
+    raw_datasets = raw_datasets.map(
+        apply_chat_template,
+        fn_kwargs={"tokenizer": tokenizer, "task": "kto"},
+        num_proc=data_args.preprocessing_num_workers,
+        remove_columns=column_names,
+        desc="Formatting comparisons with prompt template",
+    )
+
+    for split in ["train", "test"]:
+        raw_datasets[split] = raw_datasets[split].rename_columns(
+            {"text_prompt": "prompt", "text_real": "real", "text_generated": "generated"}
+        )
+
 
     torch_dtype = (
         model_args.torch_dtype if model_args.torch_dtype in ["auto", None] else getattr(torch, model_args.torch_dtype)
@@ -187,8 +162,8 @@ def main():
         model_init_kwargs=model_kwargs,
         ref_model_init_kwargs=ref_model_kwargs,
         args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
+        train_dataset=raw_datasets["train"],
+        eval_dataset=raw_datasets["test"],
         tokenizer=tokenizer,
         peft_config=get_peft_config(model_args),
     )

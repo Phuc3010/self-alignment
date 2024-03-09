@@ -18,15 +18,16 @@ beta: 0.1
 do_eval: false
 evaluation_strategy: "no"
 eval_steps: 100
-prior: 0.5
-gradient_accumulation_steps: 2
+prior: 0.1
+gradient_accumulation_steps: 1
 gradient_checkpointing: true
 gradient_checkpointing_kwargs:
   use_reentrant: False
 hub_model_id: zephyr-7b-kto-iter0
 learning_rate: 5.0e-7
+run_name: zephyr-7b-kto-iter0
 log_level: info
-logging_steps: 10
+logging_steps: 5
 lr_scheduler_type: linear
 max_length: 2048
 max_prompt_length: 1024
@@ -40,7 +41,7 @@ per_device_eval_batch_size: 4
 push_to_hub: true
 save_strategy: "steps"
 save_steps: 100
-loss_type: "kto_pair"
+loss_type: "nnpu"
 save_total_limit: -1
 seed: 42
 warmup_ratio: 0.1
