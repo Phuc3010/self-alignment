@@ -26,8 +26,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from accelerate.utils import is_deepspeed_available
-from tqdm import tqdm
+from accelerate.utils import is_deepspeed_available, tqdm
 from datasets import Dataset, concatenate_datasets, interleave_datasets
 from torch.utils.data import DataLoader, SequentialSampler
 from transformers import (
@@ -62,6 +61,7 @@ if is_wandb_available():
 
 if is_deepspeed_available():
     import deepspeed
+
 
 class KTOTrainer(Trainer):
     r"""
@@ -293,14 +293,14 @@ class KTOTrainer(Trainer):
 
         self.max_length = max_length
         self.generate_during_eval = args.generate_during_eval
-        self.loss_type = args.loss_type
-        self.prior = args.prior
         self.label_pad_token_id = args.label_pad_token_id
         self.padding_value = args.padding_value if args.padding_value is not None else tokenizer.pad_token_id
         self.max_prompt_length = max_prompt_length
         self.truncation_mode = args.truncation_mode
         self.max_completion_length = max_completion_length
         self.tokenizer = tokenizer
+        self.loss_type = args.loss_type
+        self.prior = args.prior
         self.precompute_ref_log_probs = args.precompute_ref_log_probs
 
         # Since ref_logs are precomputed on the first call to get_train/eval_dataloader
@@ -317,9 +317,7 @@ class KTOTrainer(Trainer):
         self.undesirable_weight = args.undesirable_weight
 
         # get KL datasets
-        total_batch_size = (
-            max(torch.cuda.device_count(), 1) * args.per_device_train_batch_size * args.gradient_accumulation_steps
-        )
+        total_batch_size = torch.cuda.device_count() * args.per_device_train_batch_size * args.gradient_accumulation_steps
         if total_batch_size <= 1:
             raise ValueError(
                 "Batch size is 1 (too small). KTO will not work properly because the KL term will be equivalent to the implied reward."
@@ -375,7 +373,7 @@ class KTOTrainer(Trainer):
                     UserWarning,
                 )
 
-        # split the dataset and interleave them together with equal probability of choosing chosen or rejected
+        # split the dataset and interleave them together with equal probability of choosing real or generated
         interleaved_train_dataset = interleave_datasets(
             [desirable, undesirable],
             stopping_strategy="all_exhausted",
@@ -549,7 +547,7 @@ class KTOTrainer(Trainer):
                 name="reference_KL_logps", column=torch.cat(reference_KL_logps).float().numpy()
             )
 
-            # Save calculated reference_chosen_logps and reference_rejected_logps to the eval_dataset for subsequent runs
+            # Save calculated reference_real_logps and reference_generated_logps to the eval_dataset for subsequent runs
             if self.eval_dataset is not None:
                 self.eval_dataset = eval_dataset
             self._precomputed_eval_ref_log_probs = True
@@ -885,51 +883,16 @@ class KTOTrainer(Trainer):
                 "examples for which an output sequence was predicted."
             )
 
-        chosen_idx = [i for i in range(completion_logps.shape[0]) if batch["label"][i] is True]
-        rejected_idx = [i for i in range(completion_logps.shape[0]) if batch["label"][i] is False]
+        real_idx = [i for i in range(completion_logps.shape[0]) if batch["label"][i] is True]
+        generated_idx = [i for i in range(completion_logps.shape[0]) if batch["label"][i] is False]
 
-        chosen_logps = completion_logps[chosen_idx, ...]
-        rejected_logps = completion_logps[rejected_idx, ...]
+        real_logps = completion_logps[real_idx, ...]
+        generated_logps = completion_logps[generated_idx, ...]
 
-        chosen_logits = completion_logits[chosen_idx, ...]
-        rejected_logits = completion_logits[rejected_idx, ...]
+        real_logits = completion_logits[real_idx, ...]
+        generated_logits = completion_logits[generated_idx, ...]
 
-        return (chosen_logps, rejected_logps, chosen_logits, rejected_logits, KL_logps)
-
-    def prior_estimation(self, verbose=True):
-        train_loader= self.get_train_dataloader()
-        all_values = []
-        from tqdm import tqdm
-        import numpy as np
-
-        with torch.no_grad():
-            if verbose:
-                train_loader = tqdm(train_loader, desc="Estimating class prior: ")
-            for batch in train_loader:
-                (
-                    policy_real_logps,
-                    policy_generated_logps,
-                    policy_real_logits,
-                    policy_generated_logits,
-                ) = self.concatenated_forward(self.model, batch)
-
-                (
-                    opponent_real_logps,
-                    opponent_generated_logps,
-                    _,
-                    _,
-                ) = self.concatenated_forward(self.ref_model, batch)
-                
-                real_kl = (policy_real_logps-opponent_real_logps).mean().clamp(min=0)
-                generated_logratios = policy_generated_logps - opponent_generated_logps
-                # values = F.sigmoid(spin_trainer.beta*(real_logratios-generated_kl))
-                negative_values = F.sigmoid(self.beta*(generated_logratios-real_kl))
-                batch_values = negative_values.cpu().tolist()
-                all_values.extend(batch_values)
-                if verbose:
-                    train_loader.set_postfix(batch_probs=np.mean(batch_values), moving_probs=np.mean(all_values))
-            estimated_prior = sum(all_values)/len(all_values)
-            self.prior = estimated_prior
+        return (real_logps, generated_logps, real_logits, generated_logits, KL_logps)
 
     def kto_loss(
         self,
@@ -958,6 +921,7 @@ class KTOTrainer(Trainer):
         """
         KL = (policy_KL_logps - reference_KL_logps).mean().detach()
         KL = self.accelerator.gather(KL).mean().clamp(min=0)
+        
         if self.loss_type=="kto_pair":
             if policy_real_logps.shape[0] != 0 or reference_real_logps.shape[0] != 0:
                 real_logratios = policy_real_logps - reference_real_logps
@@ -995,9 +959,10 @@ class KTOTrainer(Trainer):
 
                 real_negative_losses = (self.prior*(1-F.sigmoid(self.beta*(KL-real_logratios)))).mean()
                 unlabeled_negative_losses = (1-F.sigmoid(self.beta*(KL-generated_logratios))).mean()
-                policy_losses = torch.clamp(unlabeled_negative_losses-real_negative_losses, min=-0.0)
-                losses = real_losses + policy_losses
-            
+                if unlabeled_negative_losses - real_negative_losses > 0:
+                    losses = real_losses + unlabeled_negative_losses-real_negative_losses
+                else:
+                    losses = real_negative_losses - unlabeled_negative_losses
             elif have_positive and not have_unlabeled:
                 real_logratios = policy_real_logps - reference_real_logps
                 losses = (self.prior*(1 - F.sigmoid(self.beta * (real_logratios - KL)))).mean()
@@ -1067,26 +1032,18 @@ class KTOTrainer(Trainer):
             reference_KL_logps,
         )
 
-        # lists can't be empty -- if they are, then accelerate.gather will hang
-        if policy_real_logps.shape[0] == 0:
-            policy_real_logps = torch.Tensor([torch.nan]).to(self.accelerator.device)
-
-        if policy_generated_logps.shape[0] == 0:
-            policy_generated_logps = torch.Tensor([torch.nan]).to(self.accelerator.device)
-
-        mean_real_reward = self.accelerator.gather(real_rewards.detach()).nanmean().nan_to_num(0)
-        mean_generated_reward = self.accelerator.gather(generated_rewards.detach()).nanmean().nan_to_num(0)
-        mean_margin = mean_real_reward - mean_generated_reward
-        mean_logps_real = self.accelerator.gather(policy_real_logps.detach()).nanmean().nan_to_num(0)
-        mean_logps_generated = self.accelerator.gather(policy_generated_logps.detach()).nanmean().nan_to_num(0)
+        mean_real_reward = real_rewards.nanmean().detach()
+        mean_generated_reward = generated_rewards.nanmean().detach()
+        mean_real_logps = policy_real_logps.nanmean().detach()
+        mean_generated_logps = policy_generated_logps.nanmean().detach()
 
         prefix = "eval_" if train_eval == "eval" else ""
-        metrics[f"{prefix}rewards/real"] = mean_real_reward.cpu()
-        metrics[f"{prefix}rewards/generated"] = mean_generated_reward.cpu()
-        metrics[f"{prefix}rewards/margins"] = mean_margin.cpu()
+        metrics[f"{prefix}rewards/real"] = self.accelerator.gather(mean_real_reward).nanmean().cpu()
+        metrics[f"{prefix}rewards/generated"] = self.accelerator.gather(mean_generated_reward).nanmean().cpu()
+        metrics[f"{prefix}rewards/margins"] = metrics[f"{prefix}rewards/real"] - metrics[f"{prefix}rewards/generated"]
         metrics[f"{prefix}kl"] = kl.item()  # has already been gathered in kto_loss
-        metrics[f"{prefix}logps/generated"] = mean_logps_real.cpu()
-        metrics[f"{prefix}logps/real"] = mean_logps_generated.cpu()
+        metrics[f"{prefix}logps/real"] = self.accelerator.gather(mean_real_logps).nanmean().cpu()
+        metrics[f"{prefix}logps/generated"] = self.accelerator.gather(mean_generated_logps).nanmean().cpu()
 
         if self.loss_type == "kto_pair":
             loss = (
@@ -1205,10 +1162,10 @@ class KTOTrainer(Trainer):
         if prediction_loss_only:
             return (loss.detach(), None, None)
 
-        # logits for the chosen and rejected samples from model
+        # logits for the real and generated samples from model
         logits_dict = {
-            "eval_logits/chosen": metrics["eval_logits/chosen"],
-            "eval_logits/rejected": metrics["eval_logits/rejected"],
+            "eval_logits/real": metrics["eval_logits/real"],
+            "eval_logits/generated": metrics["eval_logits/generated"],
         }
         logits = tuple(v.unsqueeze(dim=0) for k, v in logits_dict.items() if k not in ignore_keys)
         logits = torch.stack(logits).mean(axis=1).to(self.accelerator.device)

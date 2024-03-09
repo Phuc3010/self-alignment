@@ -1,5 +1,5 @@
-model_name_or_path: alignment-handbook/zephyr-7b-sft-full
-# model_name_or_path: DatPySci/tiny-llama-sft-full
+# model_name_or_path: alignment-handbook/zephyr-7b-sft-full
+model_name_or_path: DatPySci/tiny-llama-sft-full
 torch_dtype: bfloat16
 use_flash_attention_2: true
 
@@ -40,7 +40,7 @@ per_device_eval_batch_size: 4
 push_to_hub: true
 save_strategy: "steps"
 save_steps: 100
-loss_type: "nnpu"
+loss_type: "kto_pair"
 save_total_limit: -1
 seed: 42
 warmup_ratio: 0.1

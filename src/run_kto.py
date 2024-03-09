@@ -73,6 +73,7 @@ def get_flat_data(raw_datasets, split, tokenizer):
     dataset = raw_datasets[split]
 
     for sample in tqdm(dataset, desc="Formatting data for KTO"):
+
         prompt = sample['real'][0]
         prompt = tokenizer.apply_chat_template(
             prompt, tokenize=False, add_generation_prompt=True
@@ -99,6 +100,8 @@ logger = logging.getLogger(__name__)
 def main():
     parser = H4ArgumentParser((ModelArguments, DataArguments, KTOConfig))
     model_args, data_args, training_args = parser.parse()
+    print(training_args.loss_type)
+    print(training_args.prior)
 
     #######
     # Setup
