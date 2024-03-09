@@ -12,7 +12,7 @@ for epoch in "${epochs[@]}"; do
     OUTPUT_DIR="data/model/tiny-llama-kto-iter0-${prior}-${epoch}"
     EVAL_PATH="data/output/tiny-llama-kto-iter0-${prior}-${epoch}"
     
-    echo "$SCRIPT_COMMAND$prior --num_train_epochs=${epoch} --output_dir=${OUTPUT_DIR} --hub_model_id=tiny-llama-kto-iter0-${prior}-epoch${epoch}"
+    eval "$SCRIPT_COMMAND$prior --num_train_epochs=${epoch} --output_dir=${OUTPUT_DIR} --hub_model_id=tiny-llama-kto-iter0-${prior}-epoch${epoch}"
 
     eval "accelerate launch -m lm_eval --model=hf --model_args pretrained=${OUTPUT_DIR},dtype=bfloat16 --tasks gsm8k --batch_size 1 --num_fewshot 5 --output_path ${EVAL_PATH}/gsm8k  --log_samples"
     eval "accelerate launch -m lm_eval --model=hf --model_args pretrained=${OUTPUT_DIR},dtype=bfloat16 --tasks hellaswag --batch_size 1 --num_fewshot 10 --output_path ${EVAL_PATH}/hellaswag --log_samples"
