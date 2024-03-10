@@ -425,10 +425,10 @@ class KTOTrainer(Trainer):
             # Implementation 1:
             # losses = real_losses + torch.clamp(unlabeled_negative_losses-real_negative_losses, min=0.0)
             # Implementation 2:
-            if unlabeled_negative_losses - real_negative_losses > 0:
+            if unlabeled_negative_losses - real_negative_losses >= 0:
                 losses = real_losses + unlabeled_negative_losses-real_negative_losses
             else:
-                losses = real_negative_losses - unlabeled_negative_losses
+                losses = real_losses
         else:
             raise ValueError(f"Unknown loss type: {self.loss_type}. Should be one of ['sigmoid', 'kto_pair', 'nnpu']")
 
