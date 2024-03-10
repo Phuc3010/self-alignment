@@ -423,12 +423,12 @@ class KTOTrainer(Trainer):
             real_negative_losses = (self.prior*(1-F.sigmoid(self.beta*(generated_KL-real_logratios)))).mean()
             unlabeled_negative_losses = (1-F.sigmoid(self.beta*(real_KL-generated_logratios))).mean()
             # Implementation 1:
-            losses = real_losses + torch.clamp(unlabeled_negative_losses-real_negative_losses, min=0.0)
+            # losses = real_losses + torch.clamp(unlabeled_negative_losses-real_negative_losses, min=0.0)
             # Implementation 2:
-            # if unlabeled_negative_losses - real_negative_losses > 0:
-            #     losses = real_losses + unlabeled_negative_losses-real_negative_losses
-            # else:
-            #     losses = real_negative_losses - unlabeled_negative_losses
+            if unlabeled_negative_losses - real_negative_losses > 0:
+                losses = real_losses + unlabeled_negative_losses-real_negative_losses
+            else:
+                losses = real_negative_losses - unlabeled_negative_losses
         else:
             raise ValueError(f"Unknown loss type: {self.loss_type}. Should be one of ['sigmoid', 'kto_pair', 'nnpu']")
 
