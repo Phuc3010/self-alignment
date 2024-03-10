@@ -428,7 +428,7 @@ class KTOTrainer(Trainer):
             if unlabeled_negative_losses - real_negative_losses >= 0:
                 losses = real_losses + unlabeled_negative_losses-real_negative_losses
             else:
-                losses = real_losses
+                losses = real_negative_losses-unlabeled_negative_losses
         else:
             raise ValueError(f"Unknown loss type: {self.loss_type}. Should be one of ['sigmoid', 'kto_pair', 'nnpu']")
 
@@ -542,6 +542,10 @@ class KTOTrainer(Trainer):
 
         prefix = "eval_" if train_eval == "eval" else ""
         metrics[f"{prefix}rewards/real"] = real_rewards.cpu().mean()
+        real_logratios = (policy_real_logps - opponent_real_logps).detach()
+        metrics[f"{prefix}logits/real_probs"] = F.sigmoid(self.beta*(real_logratios-KL)).cpu().mean()
+        generated_logratios = (policy_generated_logps - opponent_generated_logps).detach()
+        metrics[f"{prefix}logits/generated_probs"] = F.sigmoid(self.beta*(generated_logratios-KL)).cpu().mean()
         metrics[f"{prefix}kl"] = KL.item()
         metrics[f"{prefix}rewards/generated"] = generated_rewards.cpu().mean()
         metrics[f"{prefix}rewards/accuracies"] = reward_accuracies.cpu().mean()
